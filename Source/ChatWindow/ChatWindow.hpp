@@ -13,11 +13,11 @@ class ChatWindow : public QWidget
   Q_OBJECT
 
 public:
-  ChatWindow( bool isServer, const QString &host, quint16 port );
+  ChatWindow(bool isServer, const QString &host, quint16 port);
 
 private slots:
   void sendMessage();
-  void onMessageReceived( const QString &msg );
+  void onMessageReceived(const QString &msg);
 
 private:
   QTextEdit* m_pChatView;

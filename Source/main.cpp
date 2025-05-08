@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     if (argc > 1 && QString(argv[1]) == "server")
         isServer = true;
 
-    ChatWindow window( isServer, host, port );
+    ChatWindow window(isServer, host, port);
     window.show();
 
     return app.exec();
