@@ -21,11 +21,11 @@ ChatWindow::ChatWindow(bool isServer, const QString &host, quint16 port)
 
     if (isServer) {
         m_pServer = new CServer(port);
-        connect(m_pServer, &ChatServer::messageReceived, this, &ChatWindow::onMessageReceived);
+        connect(m_pServer, &CServer::messageReceived, this, &ChatWindow::onMessageReceived);
         m_pServer->start();
     } else {
         m_pClient = new CClient(host, port);
-        connect(m_pClient, &ChatClient::messageReceived, this, &ChatWindow::onMessageReceived);
+        connect(m_pClient, &CClient::messageReceived, this, &ChatWindow::onMessageReceived);
         m_pClient->start();
     }
 }
