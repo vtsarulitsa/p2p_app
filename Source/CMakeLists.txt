@@ -13,6 +13,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_subdirectory(Client)
 add_subdirectory(Server)
 add_subdirectory(ChatWindow)
+add_subdirectory(Message)
 
 # Main application
 add_executable(p2p_app main.cpp)
@@ -20,7 +21,6 @@ add_executable(p2p_app main.cpp)
 # Link all modules and Qt
 target_link_libraries(p2p_app
     Qt6::Widgets
-    Client
-    Server
     ChatWindow
+    Message
 )
