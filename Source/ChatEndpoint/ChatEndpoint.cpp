@@ -88,13 +88,13 @@ void CChatEndpoint::SendFile(const QString& filePath)
     QByteArray fileNameBytes = fileName.toUtf8();
     if (fileNameBytes.size() > CMessage::PAYLOAD_SIZE)
     {
-      emit ErrorOccurred("File name is too long");
+      qDebug() << "File name is too long:" << fileName;
       return;
     }
 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
-      emit ErrorOccurred("Cannot open file");
+      qDebug() << "Cannot open file for reading:" << filePath;
       return;
     }
 
@@ -103,16 +103,18 @@ void CChatEndpoint::SendFile(const QString& filePath)
     char buffer[CMessage::PAYLOAD_SIZE] = {0};
 
     ssize_t fileSize = file.size();
-    ssize_t totalBytesSent = 0;
-    while (!file.atEnd()) {
-      ssize_t bytesRead = file.read(buffer, sizeof(buffer));
-      if (bytesRead < 0)
+    ssize_t totalFileBytesSent = 0;
+
+    while (fileSize > totalFileBytesSent) {
+      qint64 toRead = qMin(CMessage::PAYLOAD_SIZE, fileSize - totalFileBytesSent);
+      QByteArray rawFileData = file.read(toRead);
+      if (rawFileData.isEmpty())
       {
-        emit ErrorOccurred("Error reading file");
+        qDebug() << "Error reading file";
         return;
       }
-
-      QByteArray rawFileData(buffer, sizeof(buffer));
+      
+      ssize_t fileBytesRead = rawFileData.size();
       CMessage message(rawFileData, CMessage::EMessageType::MT_FILE, fileName);
       QByteArray rawMessage = message.Serialize();
 
@@ -122,11 +124,12 @@ void CChatEndpoint::SendFile(const QString& filePath)
 
       if (bytesSent < 0)
       {
-        emit ErrorOccurred("Error sending file");
+        qDebug() << "Error sending file";
         return;
       }
-      totalBytesSent += bytesSent;
-      emit FileTransferProgress(totalBytesSent / fileSize * 100);
+      
+      totalFileBytesSent += fileBytesRead;
+      emit FileTransferProgress(totalFileBytesSent / fileSize * 100);
     }
 
     emit FileTransferFinished();
@@ -191,7 +194,7 @@ void CChatEndpoint::ReceiveFile(const std::shared_ptr<CMessage>& spMessage) {
     QString fileName = spMessage->GetFilename();
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly)) {
-      emit ErrorOccurred("Can't open file for writing: " + fileName);
+      qDebug() << "Cannot open file for writing:" << fileName;
       return;
     }
   
@@ -210,11 +213,11 @@ void CChatEndpoint::ReceiveFile(const std::shared_ptr<CMessage>& spMessage) {
       recvLock.unlock();
       if (bytesReceived < 0)
       {
-        emit ErrorOccurred("Error receiving file");
+        qDebug() << "Error receiving file" << fileName;
         return;
       }
 
-      QByteArray rawMessage(buffer, sizeof(buffer));
+      QByteArray rawMessage(buffer, bytesReceived);
       auto spFileChunkMessage = CMessage::TryDeserialize(rawMessage);
       if(!spFileChunkMessage)
       {

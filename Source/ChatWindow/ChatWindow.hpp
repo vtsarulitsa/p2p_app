@@ -20,8 +20,8 @@ public:
 private slots:
   void sendMessage();
   void OnTextMessageReceived(const QString& message);
-  // void OnFileTransferProgress(int percent);
-  // void OnFileTransferFinished();
+  void OnFileTransferProgress(int percent);
+  void OnFileTransferFinished();
   // void OnErrorOccurred(const QString &err);
 
 private:

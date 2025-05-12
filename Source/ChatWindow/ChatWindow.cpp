@@ -35,6 +35,8 @@ ChatWindow::ChatWindow(const QString &host, quint16 port)
   m_chatEndpointThread.start();
 
   connect(m_pChatEndpoint, &CChatEndpoint::TextMessageReceived, this, &ChatWindow::OnTextMessageReceived);
+  connect(m_pChatEndpoint, &CChatEndpoint::FileTransferProgress, this, &ChatWindow::OnFileTransferProgress);
+  connect(m_pChatEndpoint, &CChatEndpoint::FileTransferFinished, this, &ChatWindow::OnFileTransferFinished);
   connect(m_pSendButton, &QPushButton::clicked, this, &ChatWindow::sendMessage);
   connect(m_chooseFileButton, &QPushButton::clicked, [&]() {
     QString filePath = QFileDialog::getOpenFileName(this, "Open File", "", "All Files (*.*)");
@@ -75,7 +77,6 @@ void ChatWindow::sendMessage() {
     QFileInfo fileInfo(filePath);
     auto fileName = fileInfo.fileName();
 
-    m_statusBar->setText("Sending " + fileName);
     m_progressBar->setVisible(true);
     m_pInput->clear();
     m_pInput->setReadOnly(false);
@@ -84,7 +85,8 @@ void ChatWindow::sendMessage() {
     QFile file(filePath);
     if (file.exists())
     {
-      m_pChatEndpoint->SendFile(fileName);
+      qDebug() << "Send file" << filePath;
+      m_pChatEndpoint->SendFile(filePath);
     }
     else
     {
@@ -104,6 +106,24 @@ void ChatWindow::sendMessage() {
   }
 }
 
-void ChatWindow::OnTextMessageReceived(const QString &msg) {
-    m_pChatView->append("Peer: " + msg);
+void ChatWindow::OnTextMessageReceived(const QString& msg) {
+  m_pChatView->append("Peer: " + msg);
+}
+
+void ChatWindow::OnFileTransferProgress(int percent)
+{
+  m_progressBar->setValue(percent);
+}
+
+void ChatWindow::OnFileTransferFinished()
+{
+  m_progressBar->setVisible(false);
+  m_progressBar->setValue(0);
+
+  QString filePath = m_statusBar->text();
+  m_statusBar->clear();
+
+  QFileInfo fileInfo(filePath);
+  auto fileName = fileInfo.fileName();
+  m_pChatView->append("You: " + fileName);
 }

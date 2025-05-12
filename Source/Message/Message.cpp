@@ -31,14 +31,20 @@ std::shared_ptr<CMessage> CMessage::TryDeserialize(QByteArray &buffer)
   SMessageHeader header;
   memcpy(&header, buffer.constData(), HEADER_SIZE);
 
+  if (buffer.size() <= HEADER_SIZE + header.nameLength)
+  {
+    return nullptr;
+  }
+
+  ssize_t payloadSize = buffer.size() - HEADER_SIZE + header.nameLength;
   auto message = std::make_shared<CMessage>(
-    buffer.mid(HEADER_SIZE + header.nameLength, MESSAGE_SIZE),
+    buffer.mid(HEADER_SIZE + header.nameLength, payloadSize),
     static_cast<EMessageType>(header.type),
     QString::fromUtf8(buffer.mid(HEADER_SIZE, header.nameLength)),
     header.dataLength
   );
 
-  buffer = buffer.mid(MESSAGE_SIZE);
+  buffer.clear();
   return message;
 }
 
