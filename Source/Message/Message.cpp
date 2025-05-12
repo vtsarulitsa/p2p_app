@@ -23,12 +23,13 @@ QByteArray CMessage::Serialize() const
 std::shared_ptr<CMessage> CMessage::TryDeserialize(QByteArray &buffer)
 {
   constexpr int HEADER_SIZE = sizeof(SMessageHeader);
-  if (buffer.size() < HEADER_SIZE) return nullptr;
+  if (buffer.size() < HEADER_SIZE)
+  {
+    return nullptr;
+  }
 
   SMessageHeader header;
   memcpy(&header, buffer.constData(), HEADER_SIZE);
-
-  if (buffer.size() < MESSAGE_SIZE) return nullptr;
 
   auto message = std::make_shared<CMessage>(
     buffer.mid(HEADER_SIZE + header.nameLength, MESSAGE_SIZE),

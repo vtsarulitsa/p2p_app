@@ -3,6 +3,7 @@
 #include "Message.hpp"
 #include <QThread>
 #include <QString>
+#include <QDebug>
 #include <QPixmap>
 #include <mutex>
 
@@ -15,6 +16,7 @@ public:
 
 public slots:
   void EventLoop();
+  void EstablishConnection();
   void SendText(const QString& textMessage);
   void SendFile(const QString& filePath);
 

@@ -13,43 +13,55 @@
 
 CChatEndpoint::CChatEndpoint(const QString& host, uint16_t port)
   : m_host(host), m_port(port), m_isServer(host.isNull() || host.isEmpty())
+{}
+
+void CChatEndpoint::EstablishConnection()
 {
   if (m_isServer)
     SetupServer();
   else
-    SetupClient();  
+    SetupClient();
 }
 
 void CChatEndpoint::EventLoop()
 {
   constexpr int FD_COUNT = 1;
   pollfd fds[FD_COUNT];
-  fds[0].fd = m_socket;
-  fds[0].events = POLLIN;
 
   int timeoutMs = 100;
   while (true)
   {
+    fds[0].fd = m_socket;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
     int ret = poll(fds, FD_COUNT, timeoutMs);
-    if (ret < 0) break;
+    if (ret < 0) 
+    {
+      break;
+    }
 
     if (fds[0].revents & POLLIN)
+    {
       ReceiveMessage();
+    }
   }
 }
 
 void CChatEndpoint::ReceiveMessage()
 {
-  char buffer[BUFFER_SIZE];
+  char buffer[BUFFER_SIZE] = {0};
+
   std::unique_lock<std::mutex> recvLock(m_recvMutex);
-  ssize_t bytesReceived = ::recv(m_socket, buffer, sizeof(BUFFER_SIZE), 0);
+  ssize_t bytesReceived = ::recv(m_socket, buffer, sizeof(buffer), 0);
   recvLock.unlock();
+
   if (bytesReceived < 0)
   {
     qDebug() << "Failed to receive message";
   }
 
-  QByteArray byteArray(buffer, sizeof(buffer));
+  QByteArray byteArray(buffer, bytesReceived);
+  qDebug() << "Received" << bytesReceived << "bytes";
   auto spMessage = CMessage::TryDeserialize(byteArray);
   if (!spMessage)
   {
@@ -129,7 +141,11 @@ void CChatEndpoint::SendText(const QString& textMessage)
   auto byteArray = message.Serialize();
 
   std::unique_lock<std::mutex> sendLock(m_sendMutex);
-  ::send(m_socket, byteArray.constData(), byteArray.size(), 0);
+  ssize_t bytesSent = ::send(m_socket, byteArray.constData(), byteArray.size(), 0);
+  if (bytesSent <= 0) 
+  {
+    qDebug() << "Failed to send text message";
+  }
 }
 
 void CChatEndpoint::SetupClient() {
@@ -167,7 +183,7 @@ void CChatEndpoint::SetupServer() {
   m_socket = ::accept(serverFd, (sockaddr*) &clientAddr, &clientAddrLen);
 
   qDebug() << "Client connected.";
-  close(serverFd);
+  ::close(serverFd);
 }
 
 void CChatEndpoint::ReceiveFile(const std::shared_ptr<CMessage>& spMessage) {

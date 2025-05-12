@@ -21,6 +21,7 @@ ChatWindow::ChatWindow(const QString &host, quint16 port)
     connect(m_pChatEndpoint, &CChatEndpoint::TextMessageReceived, this, &ChatWindow::OnTextMessageReceived);
     connect(m_pSendButton, &QPushButton::clicked, this, &ChatWindow::sendMessage);
 
+    QMetaObject::invokeMethod(m_pChatEndpoint, "EstablishConnection", Qt::QueuedConnection);
     QMetaObject::invokeMethod(m_pChatEndpoint, "EventLoop", Qt::QueuedConnection);
 }
 
@@ -28,13 +29,15 @@ ChatWindow::~ChatWindow()
 {
     m_chatEndpointThread.quit();
     m_chatEndpointThread.wait();
+    m_pChatEndpoint->deleteLater();
 }
 
 void ChatWindow::sendMessage() {
     QString msg = m_pInput->text();
-    if (!msg.isEmpty()) {
+    if (!msg.isEmpty())
+    {
         m_pChatView->append("You: " + msg);
-        QMetaObject::invokeMethod(m_pChatEndpoint, "SendText", Qt::QueuedConnection, Q_ARG(QString, msg));
+        m_pChatEndpoint->SendText(msg);
         m_pInput->clear();
     }
 }

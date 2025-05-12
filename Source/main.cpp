@@ -12,6 +12,7 @@ int main(int argc, char *argv[]) {
         host.clear();
 
     ChatWindow window(host, port);
+    QObject::connect(&window, &QWidget::destroyed, &app, &QCoreApplication::quit);
     window.show();
 
     return app.exec();
