@@ -18,12 +18,15 @@ public:
   #pragma pack(push, 1)
   struct SMessageHeader {
     quint8  type;
-    quint32 nameLength;
-    quint32 dataLength;
+    qint64 nameLength;
+    qint64 dataLength;
   };
   #pragma pack(pop)
 
-  CMessage(const QByteArray &data, EMessageType type = MT_TEXT, const QString &filename = "");
+  static constexpr ssize_t MESSAGE_SIZE = 4096;
+  static constexpr ssize_t PAYLOAD_SIZE = MESSAGE_SIZE - sizeof(SMessageHeader);
+
+  CMessage(const QByteArray &data, EMessageType type = MT_TEXT, const QString &filename = "", qint64 totalFileSize = 0);
 
   QByteArray Serialize() const;
 
@@ -35,8 +38,11 @@ public:
 
   QByteArray GetData() const;
 
+  ssize_t GetTotalFileSize() const;
+
 private:
   QByteArray m_data;
   EMessageType m_type;
-  QString m_filename;
+  QString m_fileName;
+  qint64 m_totalFileSize;
 };

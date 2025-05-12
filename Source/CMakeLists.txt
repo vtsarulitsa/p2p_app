@@ -7,13 +7,12 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # Find Qt (adjust version as needed)
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Core Concurrent)
 
 # Include subdirectories
-add_subdirectory(Client)
-add_subdirectory(Server)
-add_subdirectory(ChatWindow)
 add_subdirectory(Message)
+add_subdirectory(ChatEndpoint)
+add_subdirectory(ChatWindow)
 
 # Main application
 add_executable(p2p_app main.cpp)
@@ -22,5 +21,4 @@ add_executable(p2p_app main.cpp)
 target_link_libraries(p2p_app
     Qt6::Widgets
     ChatWindow
-    Message
 )

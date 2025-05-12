@@ -1,15 +1,15 @@
 #include "Message.hpp"
 
-CMessage::CMessage(const QByteArray &data, EMessageType type, const QString &filename) 
-  : m_data(data), m_type(type), m_filename(filename) {}
+CMessage::CMessage(const QByteArray &data, EMessageType type, const QString &fileName, qint64 totalFileSize) 
+  : m_data(data), m_type(type), m_fileName(fileName), m_totalFileSize(totalFileSize) {}
 
 QByteArray CMessage::Serialize() const
 {
-  QByteArray nameUtf8 = m_filename.toUtf8();
+  QByteArray nameUtf8 = m_fileName.toUtf8();
   SMessageHeader header = {
     static_cast<quint8>(m_type),
-    static_cast<quint32>(nameUtf8.size()),
-    static_cast<quint32>(m_data.size())
+    static_cast<qint64>(nameUtf8.size()),
+    static_cast<qint64>(m_totalFileSize)
   };
 
   QByteArray out;
@@ -28,16 +28,16 @@ std::shared_ptr<CMessage> CMessage::TryDeserialize(QByteArray &buffer)
   SMessageHeader header;
   memcpy(&header, buffer.constData(), HEADER_SIZE);
 
-  int totalSize = HEADER_SIZE + header.nameLength + header.dataLength;
-  if (buffer.size() < totalSize) return nullptr;
+  if (buffer.size() < MESSAGE_SIZE) return nullptr;
 
   auto message = std::make_shared<CMessage>(
-    buffer.mid(HEADER_SIZE + header.nameLength, header.dataLength),
+    buffer.mid(HEADER_SIZE + header.nameLength, MESSAGE_SIZE),
     static_cast<EMessageType>(header.type),
-    QString::fromUtf8(buffer.mid(HEADER_SIZE, header.nameLength))
+    QString::fromUtf8(buffer.mid(HEADER_SIZE, header.nameLength)),
+    header.dataLength
   );
 
-  buffer = buffer.mid(totalSize);
+  buffer = buffer.mid(MESSAGE_SIZE);
   return message;
 }
 
@@ -48,10 +48,15 @@ CMessage::EMessageType CMessage::GetType() const
 
 QString CMessage::GetFilename() const
 {
-  return m_filename;
+  return m_fileName;
 }
 
 QByteArray CMessage::GetData() const
 {
   return m_data;
+}
+
+ssize_t CMessage::GetTotalFileSize() const
+{
+  return static_cast<ssize_t>(m_totalFileSize);
 }

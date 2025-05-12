@@ -1,10 +1,7 @@
 #include "ChatWindow.hpp"
-#include "Client.hpp"
-#include "Server.hpp"
 #include <QVBoxLayout>
 
-ChatWindow::ChatWindow(bool isServer, const QString &host, quint16 port)
-    : m_pClient(nullptr), m_pServer(nullptr)
+ChatWindow::ChatWindow(const QString &host, quint16 port)
 {
     m_pChatView = new QTextEdit(this);
     m_pChatView->setReadOnly(true);
@@ -17,29 +14,31 @@ ChatWindow::ChatWindow(bool isServer, const QString &host, quint16 port)
     layout->addWidget(m_pSendButton);
     setLayout(layout);
 
+    m_pChatEndpoint = new CChatEndpoint(host, port);
+    m_pChatEndpoint->moveToThread(&m_chatEndpointThread);
+    m_chatEndpointThread.start();
+
+    connect(m_pChatEndpoint, &CChatEndpoint::TextMessageReceived, this, &ChatWindow::OnTextMessageReceived);
     connect(m_pSendButton, &QPushButton::clicked, this, &ChatWindow::sendMessage);
 
-    if (isServer) {
-        m_pServer = new CServer(port);
-        connect(m_pServer, &CServer::messageReceived, this, &ChatWindow::onMessageReceived);
-        m_pServer->start();
-    } else {
-        m_pClient = new CClient(host, port);
-        connect(m_pClient, &CClient::messageReceived, this, &ChatWindow::onMessageReceived);
-        m_pClient->start();
-    }
+    QMetaObject::invokeMethod(m_pChatEndpoint, "EventLoop", Qt::QueuedConnection);
+}
+
+ChatWindow::~ChatWindow()
+{
+    m_chatEndpointThread.quit();
+    m_chatEndpointThread.wait();
 }
 
 void ChatWindow::sendMessage() {
     QString msg = m_pInput->text();
     if (!msg.isEmpty()) {
         m_pChatView->append("You: " + msg);
-        if (m_pServer) m_pServer->send(msg);
-        if (m_pClient) m_pClient->send(msg);
+        QMetaObject::invokeMethod(m_pChatEndpoint, "SendText", Qt::QueuedConnection, Q_ARG(QString, msg));
         m_pInput->clear();
     }
 }
 
-void ChatWindow::onMessageReceived(const QString &msg) {
+void ChatWindow::OnTextMessageReceived(const QString &msg) {
     m_pChatView->append("Peer: " + msg);
 }

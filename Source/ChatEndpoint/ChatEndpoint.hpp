@@ -4,37 +4,38 @@
 #include <QThread>
 #include <QString>
 #include <QPixmap>
+#include <mutex>
 
 class CChatEndpoint : public QObject
 {
   Q_OBJECT
 
 public:
-  CChatEndpoint(const QString& host, quint16 port);
-  // bool EstablishConnection();
-  // void Send(const CMessage& message);
-  // Message Receive();
-
-signals:
-  void SendText(const QString& message);
-  void SendFile(const QString& filePath);
+  explicit CChatEndpoint(const QString& host, quint16 port);
 
 public slots:
-  void OnTextMessageReceived(const QString& message);
-  void OnFileTransferProgress(int percent);
-  void OnFileTransferFinished();
-  void OnErrorOccurred(const QString &err);
+  void EventLoop();
+  void SendText(const QString& textMessage);
+  void SendFile(const QString& filePath);
+
+signals:
+  void TextMessageReceived(const QString &msg);
+  void FileTransferProgress(int percent);
+  void FileTransferFinished();
+  void ErrorOccurred(const QString &err);
 
 private:
-  constexpr size_t BUFFER_SIZE = 4096;
+  void SetupClient();
+  void SetupServer();
+  void ReceiveMessage();
+  void ReceiveFile(const std::shared_ptr<CMessage>& spMessage);
 
-  QString m_host;
+  static constexpr size_t BUFFER_SIZE = 4096;
+
   quint16 m_port;
-  int m_fileSocketFd;
-  int m_textSocketFd;
+  QString m_host;
   bool m_isServer;
-
-  class Worker;
-  QThread m_workerThread;
-
+  int m_socket = -1;
+  std::mutex m_sendMutex;
+  std::mutex m_recvMutex;
 };

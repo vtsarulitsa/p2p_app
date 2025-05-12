@@ -9,9 +9,9 @@ int main(int argc, char *argv[]) {
     quint16 port = 1234;
 
     if (argc > 1 && QString(argv[1]) == "server")
-        isServer = true;
+        host.clear();
 
-    ChatWindow window(isServer, host, port);
+    ChatWindow window(host, port);
     window.show();
 
     return app.exec();

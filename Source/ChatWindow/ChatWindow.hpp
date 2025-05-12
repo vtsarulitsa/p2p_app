@@ -4,26 +4,28 @@
 #include <QTextEdit>
 #include <QLineEdit>
 #include <QPushButton>
-
-class CClient;
-class CServer;
+#include <QThread>
+#include "ChatEndpoint.hpp"
 
 class ChatWindow : public QWidget
 {
   Q_OBJECT
 
 public:
-  ChatWindow(bool isServer, const QString &host, quint16 port);
+  ChatWindow(const QString &host, quint16 port);
+  ~ChatWindow();
 
 private slots:
   void sendMessage();
-  void onMessageReceived(const QString &msg);
+  void OnTextMessageReceived(const QString& message);
+  // void OnFileTransferProgress(int percent);
+  // void OnFileTransferFinished();
+  // void OnErrorOccurred(const QString &err);
 
 private:
   QTextEdit* m_pChatView;
   QLineEdit* m_pInput;
   QPushButton* m_pSendButton;
-
-  CClient* m_pClient;
-  CServer* m_pServer;
+  CChatEndpoint* m_pChatEndpoint;
+  QThread m_chatEndpointThread;
 };
