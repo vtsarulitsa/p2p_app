@@ -5,6 +5,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QThread>
+#include <QLabel>
+#include <QProgressBar>
 #include "ChatEndpoint.hpp"
 
 class ChatWindow : public QWidget
@@ -26,6 +28,11 @@ private:
   QTextEdit* m_pChatView;
   QLineEdit* m_pInput;
   QPushButton* m_pSendButton;
+  QPushButton* m_chooseFileButton;
+  QPushButton* m_clearButton;
+  QProgressBar* m_progressBar;
+  QLabel* m_statusBar;
+
   CChatEndpoint* m_pChatEndpoint;
   QThread m_chatEndpointThread;
 };
