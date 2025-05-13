@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QPixmap>
 #include <mutex>
+#include <queue>
 
 class CChatEndpoint : public QObject
 {
@@ -31,6 +32,8 @@ private:
   void SetupServer();
   void ReceiveMessage();
   void ReceiveFile(const std::shared_ptr<CMessage>& spMessage);
+  void SendCompleteMessage(QByteArray& byteBuffer);
+  std::shared_ptr<CMessage> ReceiveCompleteMessage();
 
   static constexpr size_t BUFFER_SIZE = 4096;
 
@@ -40,4 +43,5 @@ private:
   int m_socket = -1;
   std::mutex m_sendMutex;
   std::mutex m_recvMutex;
+  std::priority_queue<CMessage, std::vector<CMessage>> m_messageQueue;
 };

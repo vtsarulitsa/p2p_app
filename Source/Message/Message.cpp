@@ -6,10 +6,13 @@ CMessage::CMessage(const QByteArray &data, EMessageType type, const QString &fil
 QByteArray CMessage::Serialize() const
 {
   QByteArray nameUtf8 = m_fileName.toUtf8();
+  qint64 dataLength = (m_type == EMessageType::MT_TEXT) ? static_cast<qint64>(m_data.size())
+                                                        : m_totalFileSize;
+
   SMessageHeader header = {
     static_cast<quint8>(m_type),
     static_cast<qint64>(nameUtf8.size()),
-    static_cast<qint64>(m_totalFileSize)
+    dataLength
   };
 
   QByteArray out;
@@ -22,30 +25,45 @@ QByteArray CMessage::Serialize() const
 
 std::shared_ptr<CMessage> CMessage::TryDeserialize(QByteArray &buffer)
 {
-  constexpr int HEADER_SIZE = sizeof(SMessageHeader);
+  auto spHeader = TryDeserializeHeader(buffer);
+  if (!spHeader)
+  {
+    return nullptr;
+  }
+
+  if (buffer.size() <= HEADER_SIZE + spHeader->nameLength)
+  {
+    // no payload
+    return nullptr;
+  }
+
+  ssize_t payloadSize = buffer.size() - HEADER_SIZE + spHeader->nameLength;
+  auto message = std::make_shared<CMessage>(
+    buffer.mid(HEADER_SIZE + spHeader->nameLength, payloadSize),
+    static_cast<EMessageType>(spHeader->type),
+    QString::fromUtf8(buffer.mid(HEADER_SIZE, spHeader->nameLength)),
+    spHeader->dataLength
+  );
+
+  buffer.clear();
+  return message;
+}
+
+std::shared_ptr<CMessage::SMessageHeader> CMessage::TryDeserializeHeader(const QByteArray& buffer)
+{
   if (buffer.size() < HEADER_SIZE)
   {
     return nullptr;
   }
 
-  SMessageHeader header;
-  memcpy(&header, buffer.constData(), HEADER_SIZE);
-
-  if (buffer.size() <= HEADER_SIZE + header.nameLength)
+  auto spHeader = std::make_shared<SMessageHeader>();
+  if (!spHeader)
   {
     return nullptr;
   }
+  memcpy(spHeader.get(), buffer.constData(), HEADER_SIZE);
 
-  ssize_t payloadSize = buffer.size() - HEADER_SIZE + header.nameLength;
-  auto message = std::make_shared<CMessage>(
-    buffer.mid(HEADER_SIZE + header.nameLength, payloadSize),
-    static_cast<EMessageType>(header.type),
-    QString::fromUtf8(buffer.mid(HEADER_SIZE, header.nameLength)),
-    header.dataLength
-  );
-
-  buffer.clear();
-  return message;
+  return spHeader;
 }
 
 CMessage::EMessageType CMessage::GetType() const
