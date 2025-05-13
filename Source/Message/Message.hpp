@@ -17,8 +17,9 @@ public:
 
   #pragma pack(push, 1)
   struct SMessageHeader {
-    quint8  type;
+    quint8 type;
     qint64 nameLength;
+    qint64 fileLength;
     qint64 dataLength;
   };
   #pragma pack(pop)

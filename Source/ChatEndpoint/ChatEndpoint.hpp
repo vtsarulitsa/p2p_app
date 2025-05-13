@@ -5,6 +5,8 @@
 #include <QString>
 #include <QDebug>
 #include <QPixmap>
+#include <QHash>
+#include <QFile>
 #include <mutex>
 #include <queue>
 
@@ -24,7 +26,8 @@ public slots:
 signals:
   void TextMessageReceived(const QString &msg);
   void FileTransferProgress(int percent);
-  void FileTransferFinished();
+  void FileSendingFinished(const QString& fileName);
+  void FileReceivingFinished(const QString& fileName);
   void ErrorOccurred(const QString &err);
 
 private:
@@ -44,4 +47,6 @@ private:
   std::mutex m_sendMutex;
   std::mutex m_recvMutex;
   std::priority_queue<CMessage, std::vector<CMessage>> m_messageQueue;
+  QHash<QString, std::shared_ptr<QFile>> m_openedFiles;
+  std::mutex m_filesMutex;
 };

@@ -21,8 +21,8 @@ private slots:
   void sendMessage();
   void OnTextMessageReceived(const QString& message);
   void OnFileTransferProgress(int percent);
-  void OnFileTransferFinished();
-  // void OnErrorOccurred(const QString &err);
+  void OnFileSendingFinished(const QString& fileName);
+  void OnFileReceivingFinished(const QString& fileName);
 
 private:
   QTextEdit* m_pChatView;

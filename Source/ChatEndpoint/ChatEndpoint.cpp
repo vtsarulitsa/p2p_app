@@ -75,28 +75,36 @@ void CChatEndpoint::SendFile(const QString& filePath)
     QFileInfo fileInfo(filePath);
     QString fileName = fileInfo.fileName();
     QByteArray fileNameBytes = fileName.toUtf8();
-    if (fileNameBytes.size() > CMessage::MAX_PAYLOAD_SIZE)
+    if (fileNameBytes.size() >= CMessage::MAX_PAYLOAD_SIZE)
     {
       qDebug() << "File name is too long:" << fileName;
       return;
     }
 
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
+    // check if file transfer is in progress, otherwise start one and track file
+    std::unique_lock<std::mutex> filesLock(m_filesMutex);
+    if (m_openedFiles.contains(filePath))
+    {
+      qDebug() << "File transfer is in progress already:" << filePath;
+      return;
+    } 
+
+    auto spFile = std::make_shared<QFile>(filePath);
+    if (!spFile || !spFile->open(QIODevice::ReadOnly)) {
       qDebug() << "Cannot open file for reading:" << filePath;
       return;
     }
+    m_openedFiles.insert(filePath, spFile); // track file
+    filesLock.unlock();
 
-    // send file itself
-    // using chunked messages buffer
-    char buffer[CMessage::MAX_PAYLOAD_SIZE] = {0};
-
-    ssize_t fileSize = file.size();
+    ssize_t fileSize = spFile->size();
     ssize_t totalFileBytesSent = 0;
+    ssize_t maxPayloadSize = CMessage::MAX_PAYLOAD_SIZE - fileName.size();
 
+    // send file by chunks using CMessage
     while (fileSize > totalFileBytesSent) {
-      qint64 toRead = qMin(CMessage::MAX_PAYLOAD_SIZE, fileSize - totalFileBytesSent);
-      QByteArray rawFileData = file.read(toRead);
+      qint64 toRead = qMin(maxPayloadSize, fileSize - totalFileBytesSent);
+      QByteArray rawFileData = spFile->read(toRead);
       if (rawFileData.isEmpty())
       {
         qDebug() << "Error reading file";
@@ -104,25 +112,34 @@ void CChatEndpoint::SendFile(const QString& filePath)
       }
       
       ssize_t fileBytesRead = rawFileData.size();
-      CMessage message(rawFileData, CMessage::EMessageType::MT_FILE, fileName);
+      CMessage message(rawFileData, CMessage::EMessageType::MT_FILE, fileName, fileSize);
       QByteArray rawMessage = message.Serialize();
 
-      std::unique_lock<std::mutex> sendLock(m_sendMutex);
-      ssize_t bytesSent = ::send(m_socket, rawMessage.constData(), rawMessage.size(), 0);
-      sendLock.unlock();
-
-      if (bytesSent < 0)
+      SendCompleteMessage(rawMessage);
+      if (!rawMessage.isEmpty())
       {
         qDebug() << "Error sending file";
         return;
       }
       
       totalFileBytesSent += fileBytesRead;
-      emit FileTransferProgress(totalFileBytesSent / fileSize * 100);
+      double sentBytesRatio = static_cast<double>(totalFileBytesSent) / fileSize;
+      int sentPercent = static_cast<int>(sentBytesRatio * 100.0);
+      emit FileTransferProgress(sentPercent);
     }
 
-    emit FileTransferFinished();
-    file.close();
+    qDebug() << "Finished sending file" << filePath;
+    
+    // close file and do not track it anymore
+    filesLock.lock();
+    m_openedFiles[filePath]->close();
+    if (!m_openedFiles.remove(filePath))
+    {
+      qDebug() << "File is untracked already:" << filePath;
+    }
+    filesLock.unlock();
+    
+    emit FileSendingFinished(fileName);
   });
 }
 
@@ -179,60 +196,73 @@ void CChatEndpoint::SetupServer() {
 }
 
 void CChatEndpoint::ReceiveFile(const std::shared_ptr<CMessage>& spMessage) {
-  QtConcurrent::run([this, spMessage]() {
-    QString fileName = spMessage->GetFilename();
-    QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly)) {
+  QString fileName = spMessage->GetFilename();
+
+  std::shared_ptr<QFile> spFile;
+  // get file handle or create new one if receiving chunk of a new file
+  std::unique_lock<std::mutex> filesLock(m_filesMutex);
+  if (!m_openedFiles.contains(fileName))
+  {
+    spFile = std::make_shared<QFile>(fileName);
+    if (!spFile || !spFile->open(QIODevice::WriteOnly)) {
       qDebug() << "Cannot open file for writing:" << fileName;
       return;
     }
+    m_openedFiles.insert(fileName, spFile);
+  } 
+  else
+  {
+    spFile = m_openedFiles[fileName];
+  }
+  filesLock.unlock();
   
-    QByteArray data = spMessage->GetData();
-    file.write(data.constData(), data.size());
+  QByteArray data = spMessage->GetData();
+  ssize_t payloadSize = data.size();
+  ssize_t totalWrittenToFile = 0;
 
-    ssize_t fileSize = spMessage->GetTotalFileSize();
-    ssize_t totalBytesReceived = data.size();
-
-    // receive the rest of the file
-    char buffer[BUFFER_SIZE];
-    while(totalBytesReceived < fileSize)
+  // write complete chunk to file
+  while (totalWrittenToFile < payloadSize)
+  {
+    ssize_t writtenToFile = spFile->write(data.constData(), payloadSize - totalWrittenToFile);
+    
+    if (writtenToFile < 0)
     {
-      std::unique_lock<std::mutex> recvLock(m_recvMutex);
-      ssize_t bytesReceived = ::recv(m_socket, buffer, sizeof(buffer), 0);
-      recvLock.unlock();
-      if (bytesReceived < 0)
-      {
-        qDebug() << "Error receiving file" << fileName;
-        return;
-      }
-
-      QByteArray rawMessage(buffer, bytesReceived);
-      auto spFileChunkMessage = CMessage::TryDeserialize(rawMessage);
-      if(!spFileChunkMessage)
-      {
-        qDebug() << "Failed to deserialize message";
-        break;
-      }
-
-      // text message can be received while receiving a file
-      if(spFileChunkMessage->GetType() == CMessage::EMessageType::MT_TEXT)
-      {
-        QString textMessage(spFileChunkMessage->GetData());
-        emit TextMessageReceived(textMessage);
-      }
-      else if(spFileChunkMessage->GetType() == CMessage::EMessageType::MT_FILE)
-      {
-        QByteArray fileChunk = spFileChunkMessage->GetData();
-        file.write(fileChunk.constData(), fileChunk.size());
-        totalBytesReceived += fileChunk.size();
-      }
-      
-      // clear buffer
-      memset(buffer, 0, sizeof(buffer));
+      qDebug() << "Failed to write into file" << fileName;
+      return;
     }
 
-    emit FileTransferFinished();
-  });
+    if (writtenToFile > 0)
+    {
+      data.remove(0, writtenToFile);
+      totalWrittenToFile += writtenToFile;
+    }
+  }
+
+  ssize_t expectedFileSize = spMessage->GetTotalFileSize();
+  ssize_t currentFileSize = spFile->size();
+
+  // check if transfer is finished
+  if (currentFileSize == expectedFileSize)
+  {
+    qDebug() << "Finished receiving file" << fileName;
+    
+    // close file and do not track it anymore
+    filesLock.lock();
+    m_openedFiles[fileName]->close();
+    
+    if (!m_openedFiles.remove(fileName))
+    {
+      qDebug() << "File is untracked already:" << fileName;
+    }
+    filesLock.unlock();
+
+    emit FileReceivingFinished(fileName);
+  }
+  else if (currentFileSize > expectedFileSize)
+  {
+    qDebug() << "Received" << currentFileSize << "bytes of file data, but expected" << expectedFileSize;
+  }
+  // else: file transfer is in progress
 }
 
 void CChatEndpoint::SendCompleteMessage(QByteArray& byteBuffer)
@@ -290,8 +320,7 @@ std::shared_ptr<CMessage> CChatEndpoint::ReceiveCompleteMessage()
 
   char payloadBuffer[CMessage::MAX_PAYLOAD_SIZE] = {0};
 
-  // dataLength can be > MAX_PAYLOAD_SIZE for files, so ensure receiving chunked messages <= MAX_PAYLOAD_SIZE
-  const ssize_t requiredPayloadSize = qMin(CMessage::MAX_PAYLOAD_SIZE, spHeader->dataLength);
+  const ssize_t requiredPayloadSize = spHeader->nameLength + spHeader->dataLength;
   ssize_t totalPayloadReceived = 0;
   ssize_t payloadLeftToReceive = 0;
   
