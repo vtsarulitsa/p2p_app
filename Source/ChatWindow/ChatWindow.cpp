@@ -114,7 +114,6 @@ void ChatWindow::OnTextMessageReceived(const QString& msg) {
 
 void ChatWindow::OnFileTransferProgress(int percent)
 {
-  qDebug() << "OnFileTransferProgress" << percent << "%";
   m_progressBar->setValue(percent);
 }
 

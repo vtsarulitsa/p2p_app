@@ -152,6 +152,7 @@ void CChatEndpoint::SendText(const QString& textMessage)
   if (byteArray.size() > CMessage::MAX_MESSAGE_SIZE)
   {
     qDebug() << "Text message is too long";
+    return;
   }
 
   SendCompleteMessage(byteArray);

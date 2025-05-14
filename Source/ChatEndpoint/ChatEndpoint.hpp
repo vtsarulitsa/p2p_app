@@ -8,7 +8,6 @@
 #include <QHash>
 #include <QFile>
 #include <mutex>
-#include <queue>
 
 class CChatEndpoint : public QObject
 {
@@ -46,7 +45,6 @@ private:
   int m_socket = -1;
   std::mutex m_sendMutex;
   std::mutex m_recvMutex;
-  std::priority_queue<CMessage, std::vector<CMessage>> m_messageQueue;
   QHash<QString, std::shared_ptr<QFile>> m_openedFiles;
   std::mutex m_filesMutex;
 };
